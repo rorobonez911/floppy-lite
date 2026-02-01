@@ -21,7 +21,7 @@ Simplified MIDI Controlled Floppy Drive Controller Compatible with IDE Floppies 
 
 4. Connect the STEP pin of your first drive to pin 2 on your arduino and the Direction pin to pin 3, then for the next drive step to pin 4, direction to pin 5, and the same with the next 2 pins for the next drives.
 
-5. Upload my sketch to your arduino you should hear some startup noises and if you have your drive cover off you may also see the head move all the way to one side (this is to make sure the drive is at a starting point)
+5. Upload my sketch (floppy.ino) to your Arduino you should hear some startup noises and if you have your drive cover off you may also see the head move all the way to one side (this is to make sure the drive is at a starting point)
 
 6. Open the Python GUI and select your Arduino's COM port, and a MIDI Port. MIDI data sent over the selected MIDI device will control the drives.
 
