@@ -28,8 +28,13 @@ Simplified MIDI Controlled Floppy Drive Controller Compatible with IDE Floppies 
 **MIDI channel pin mapping**
 
 pins 2/3 --> Channel 1
+
 pins 4/5 --> Channel 2
+
 pins 6/7 --> Channel 3
+
 pins 8/9 --> Channel 4
+
 pins 10/11 --> Channel 5
+
 pins 12/13 --> Channel 6
