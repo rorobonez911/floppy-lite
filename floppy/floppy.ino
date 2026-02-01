@@ -1,29 +1,25 @@
 struct Drive {
   int stepPin, dirPin;
-  unsigned long lastStep, currentInterval, targetInterval;
-  bool playing;
+  unsigned long interval_us;
+  unsigned long lastStep;
   int stepCount;
   byte held[10];
   int heldCount;
+  bool playing;
 };
 
-// Uses PWM pins on Arduino Mega also works on other models like the UNO
 Drive d[6] = {
-  {2,3,0,0,0,false,0,{0},0},    // Drive 1 (Channel 1)
-  {4,5,0,0,0,false,0,{0},0},
-  {6,7,0,0,0,false,0,{0},0},
-  {8,9,0,0,0,false,0,{0},0},
-  {10,11,0,0,0,false,0,{0},0},
-  {12,13,0,0,0,false,0,{0},0}   // Drive 6 (Channel 6)
+  {2,3,0,0,0,{0},0,false},
+  {4,5,0,0,0,{0},0,false},
+  {6,7,0,0,0,{0},0,false},
+  {8,9,0,0,0,{0},0,false},
+  {10,11,0,0,0,{0},0,false},
+  {12,13,0,0,0,{0},0,false}
 };
 
-// home pulse sends drive to a starting position but its kinda buggy still works
-const int STEPS_PER_DIR = 80;
-const int HOME_PULSES = 100;
-
-unsigned long noteToInterval(byte note) {
-  if (note > 83) note = 83;
-  double f = 440.0 * pow(2.0, (note - 69) / 12.0);
+unsigned long noteToInterval(byte n) {
+  if (n > 83) n = 83;
+  double f = 440.0 * pow(2.0, (n - 69) / 12.0);
   if (f > 400) f = 400;
   if (f < 25)  f = 25;
   return (unsigned long)(1000000.0 / f);
@@ -31,58 +27,63 @@ unsigned long noteToInterval(byte note) {
 
 void stepOnce(Drive &x) {
   digitalWrite(x.stepPin, HIGH);
-  delayMicroseconds(30);
+  delayMicroseconds(10);
   digitalWrite(x.stepPin, LOW);
-  if (++x.stepCount >= STEPS_PER_DIR) {
+  if (++x.stepCount >= 80) {
     x.stepCount = 0;
     digitalWrite(x.dirPin, !digitalRead(x.dirPin));
   }
 }
 
-void home(Drive &x) {
+void fastHome(Drive &x) {
   digitalWrite(x.dirPin, LOW);
-  for (int i=0;i<HOME_PULSES;i++) {
-    digitalWrite(x.stepPin, HIGH); delayMicroseconds(700);
-    digitalWrite(x.stepPin, LOW);  delayMicroseconds(700);
+  for (int i=0;i<140;i++) {  
+    digitalWrite(x.stepPin, HIGH); delayMicroseconds(500);
+    digitalWrite(x.stepPin, LOW);  delayMicroseconds(500);
   }
   x.stepCount = 0;
+  x.lastStep = micros();
 }
 
-void startupTone() {
-  digitalWrite(3, LOW);
-  unsigned long interval = noteToInterval(67);
+void fastStartupAll() {
+  double f = 440.0 * pow(2.0, (67 - 69) / 12.0);
+  unsigned long interval_us = 1000000.0 / f;
   unsigned long last = micros();
-  unsigned long endt = millis() + 1000;
+  unsigned long endt = millis() + 400;  
+
   while (millis() < endt) {
     unsigned long now = micros();
-    if (now - last >= interval) {
+    if (now - last >= interval_us) {
       last = now;
-      digitalWrite(2, HIGH);
-      delayMicroseconds(30);
-      digitalWrite(2, LOW);
+      for (int i=0;i<6;i++) {
+        digitalWrite(d[i].stepPin, HIGH);
+      }
+      delayMicroseconds(10);
+      for (int i=0;i<6;i++) {
+        digitalWrite(d[i].stepPin, LOW);
+      }
     }
   }
 }
 
-void noteOn(Drive &x, byte note) {
-  if (x.heldCount < 10) x.held[x.heldCount++] = note;
-  byte active = x.held[x.heldCount - 1];
-  x.targetInterval = noteToInterval(active);
-  if (!x.playing) x.currentInterval = x.targetInterval;
+void noteOn(Drive &x, byte n) {
+  if (x.heldCount < 10) x.held[x.heldCount++] = n;
+  byte a = x.held[x.heldCount - 1];
+  x.interval_us = noteToInterval(a);
   x.playing = true;
 }
 
-void noteOff(Drive &x, byte note) {
+void noteOff(Drive &x, byte n) {
   for (int i=0;i<x.heldCount;i++) {
-    if (x.held[i] == note) {
+    if (x.held[i] == n) {
       for (int j=i;j<x.heldCount-1;j++) x.held[j] = x.held[j+1];
       x.heldCount--;
       break;
     }
   }
   if (x.heldCount == 0) { x.playing = false; return; }
-  byte active = x.held[x.heldCount - 1];
-  x.targetInterval = noteToInterval(active);
+  byte a = x.held[x.heldCount - 1];
+  x.interval_us = noteToInterval(a);
 }
 
 void setup() {
@@ -90,11 +91,10 @@ void setup() {
   for (int i=0;i<6;i++) {
     pinMode(d[i].stepPin, OUTPUT);
     pinMode(d[i].dirPin, OUTPUT);
-    digitalWrite(d[i].stepPin, LOW);
-    digitalWrite(d[i].dirPin, LOW);
   }
-  for (int i=0;i<6;i++) home(d[i]);
-  startupTone();
+
+  for (int i=0;i<6;i++) fastHome(d[i]);
+  fastStartupAll();
 }
 
 void loop() {
@@ -114,15 +114,7 @@ void loop() {
   for (int i=0;i<6;i++) {
     Drive &x = d[i];
     if (!x.playing) continue;
-
-    if (x.currentInterval != x.targetInterval) {
-      long diff = (long)x.targetInterval - (long)x.currentInterval;
-      long step = diff / 20;
-      if (step == 0) step = (diff > 0 ? 1 : -1);
-      x.currentInterval += step;
-    }
-
-    if (now - x.lastStep >= x.currentInterval) {
+    if (now - x.lastStep >= x.interval_us) {
       x.lastStep = now;
       stepOnce(x);
     }
